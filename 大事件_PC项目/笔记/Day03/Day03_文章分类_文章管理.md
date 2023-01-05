@@ -183,7 +183,7 @@
 
    ```vue
    <!-- 添加分类的对话框 -->
-   <el-dialog title="添加文章分类" :visible.sync="addVisible" width="35%">
+   <el-dialog title="添加文章分类" :visible.sync="dialogVisible" width="30%">
        <span>这是一段信息</span>
        <span slot="footer" class="dialog-footer">
            <el-button size="mini">取 消</el-button>
@@ -198,7 +198,7 @@
    data () {
        return {
          // ...其他
-         addVisible: false // 添加分类-对话框是否显示
+         dialogVisible: false // 添加分类-对话框是否显示
        }
    }
    ```
@@ -206,7 +206,7 @@
 3. 在el-card里给按钮添加分类, 绑定点击事件, 让对话框出现
 
    ```vue
-   <el-button type="primary" size="mini" @click="addVisible = true">添加分类</el-button>
+   <el-button type="primary" size="mini" @click="addCatrShowDialogFn">添加分类</el-button>
    ```
 
 4. 点击取消和添加, 让dialog对话框关闭
@@ -218,11 +218,11 @@
    组件内$emit('update:visible', true)
    这个update: 是固定的
    -->
-   <el-dialog title="添加文章分类" :visible.sync="addVisible" width="35%">
+   <el-dialog title="添加文章分类" :visible.sync="dialogVisible" width="30%">
        <span>这是一段信息</span>
        <span slot="footer" class="dialog-footer">
            <el-button size="mini" @click="cancelFn">取 消</el-button>
-           <el-button size="mini" type="primary" @click="addFn">添 加</el-button>
+           <el-button size="mini" type="primary" @click="confirmFn">添 加</el-button>
        </span>
    </el-dialog>
    
@@ -231,8 +231,12 @@
      // ...其他
      methods: {
        // ...其他
+       // 添加分类按钮点击事件---为了让对话框出现
+       addCatrShowDialogFn () {
+         this.dialogVisible = true
+       },
        // 对话框内-添加按钮-点击事件
-       addFn () {
+       confirmFn () {
          this.addVisible = false
        },
        // 对话框内-取消按钮-点击事件
@@ -314,7 +318,7 @@
 
    ```vue
    <!-- 添加分类的对话框 -->
-   <el-dialog title="添加文章分类" :visible.sync="addVisible" width="35%" @closed="onAddClosedFn">
+   <el-dialog title="添加文章分类" :visible.sync="dialogVisible" width="30%" @closed="onAddClosedFn">
    </el-dialog>
    ```
 
@@ -374,23 +378,25 @@
 2. 在el-dialog弹窗里面的表单, 给添加按钮的点击事件中, 编写代码, 调用接口保存并提示
 
    ```js
-   async addFn () {
-       // 表单预校验
-       this.$refs.addRef.validate(async valid => {
+    methods: {
+       // 对话框确定按钮的点击事件 --让对话框消失，调用保存文章分类接口
+       confirmFn () {
+         this.$refs.addRef.validate(async valid => {
            if (valid) {
-               // 调用接口传递数据给后台
-               const { data: res } = await addArtCateAPI(this.addForm)
-               if (res.code !== 0) return this.$message.error('添加分类失败！')
-               this.$message.success('添加分类成功！')
-               // 重新请求列表数据
-               this.initCateListFn()
-               // 关闭对话框
-               this.addVisible = false
+             // 通过校验
+             const { data: res } = await addArtCateAPI(this.addForm)
+             if (res.code !== 0) return this.$message.error(res.message)
+             this.$message.success(res.message)
+             //重新请求列表数据
+             this.initCateListFn()
            } else {
-               return false
+             return false
            }
-       })
-   }
+         })
+         this.dialogVisible = false
+       },
+       
+     }
    ```
 
 
@@ -431,11 +437,11 @@
 
    ```vue
    <el-table-column label="操作">
-       <template v-slot="scope">
-           <el-button type="primary" size="mini" @click="updateFn(scope.row)">修改</el-button>
-           <el-button type="danger" size="mini">删除</el-button>
-       </template>
-   </el-table-column>
+             <template v-slot="scope">
+           <el-button type="primary" size="mini" @click="updateCateBtnFn(scope.row)">修改</el-button>
+             <el-button type="danger" size="mini">删除</el-button>
+             </template>
+           </el-table-column>
    ```
 
 2. 准备变量, 保存修改状态和要修改的文章分类id
@@ -453,29 +459,28 @@
 3. 在事件方法中, 修改变量的状态
 
    ```js
-   // 修改-按钮点击事件
-   updateFn (obj) {
-       this.editId = obj.id // 保存要编辑的文章分类ID
-       this.isEdit = true // 设置编辑状态
-       this.addVisible = true // 让对话框显示
-       // 设置数据回显
-       this.$nextTick(() => {
-           // 先让对话框出现, 它绑定空值的对象, 才能resetFields清空用初始空值
+    // 修改分类按钮迪点击事件
+       updateCateBtnFn (obj) {
+         this.isEdit = true
+         this.editId = obj.id
+         this.dialogVisible = true
+         this.$nextTick(() => {
+           // 数据回显
            this.addForm.cate_name = obj.cate_name
            this.addForm.cate_alias = obj.cate_alias
-       })
-   }
+         })
+       }
    ```
-
+   
 4. 在到最上面, 添加分类按钮, 绑定点击事件方法, 修改相应变量的状态
 
    ```vue
-   <el-button type="primary" size="mini" @click="addCateBtnFn">添加分类</el-button>
+   <el-button type="primary" size="mini" @click="addCatrShowDialogFn">添加分类</el-button>
    ```
 
    ```js
    // 添加分类->点击出对话框
-   addCateBtnFn () {
+   addCatrShowDialogFn () {
        this.addVisible = true // 让对话框出现
        this.editId = '' // 编辑的文章分类id设置无
        this.isEdit = false // 编辑的状态关闭
@@ -485,7 +490,7 @@
 5. 设置el-dialog的标题
 
    ```vue
-   <el-dialog :title="isEdit ? '编辑文章分类' : '添加文章分类'" :visible.sync="addVisible" width="35%" @closed="onAddClosedFn">
+   <el-dialog :title="isEdit ? '编辑文章分类' : '添加文章分类'" :visible.sync="dialogVisible" width="30%" @closed="onAddClosedFn">
    ```
 
    
@@ -548,37 +553,32 @@
    > 注意, 更新的时候, 需要携带文章分类的id值过去
 
    ```js
-   // 对话框内-添加按钮-点击事件
-       async addFn () {
-         // 表单预校验
+   // 对话框确定按钮的点击事件 --让对话框消失，调用保存文章分类接口
+       confirmFn () {
          this.$refs.addRef.validate(async valid => {
            if (valid) {
-             // 判断当前是新增还是编辑
+             // 通过校验
              if (this.isEdit) {
-               // 编辑状态
-               // 调用接口传递数据给后台
-               const { data: res } = await updateArtCateAPI({ id: this.editId, ...this.addForm })
-               if (res.code !== 0) return this.$message.error('更新分类失败！')
-               this.$message.success('更新分类成功！')
+               this.addForm.id = this.editId
+               const { data: res } = await updateArtCateAPI(this.addForm)
+               if (res.code !== 0) return this.$message.error(res.message)
+               this.$message.success(res.message)
              } else {
-               // 新增
-               // 调用接口传递数据给后台
                const { data: res } = await addArtCateAPI(this.addForm)
-               if (res.code !== 0) return this.$message.error('添加分类失败！')
-               this.$message.success('添加分类成功！')
+               if (res.code !== 0) return this.$message.error(res.message)
+               this.$message.success(res.message)
              }
    
              // 重新请求列表数据
              this.initCateListFn()
-             // 关闭对话框
-             this.addVisible = false
+             this.dialogVisible = false
            } else {
              return false
            }
          })
-       }
+       },
    ```
-
+   
    
 
 ### 小结
@@ -635,8 +635,8 @@
 
    ```js
    // 删除-文章分类
-   async removeFn (id) {
-       const { data: res } = await delArtCateAPI(id)
+   async removeFn (obj) {
+       const { data: res } = await delArtCateAPI(obj.id)
        if (res.code !== 0) return this.$message.error('删除分类失败！')
        this.$message.success('删除分类成功！')
        // 重新请求列表数据
@@ -1408,5 +1408,4 @@
    <li>参数以什么方式, 什么内容的格式, 参数名和值的类型都要和后端对应上, 因为你传递给后端后, 它可能会做参数名和类型校验, 而且他要使用的值类型不对可能会给你响应报错</li>
    </ul>
    </details>
-
 
