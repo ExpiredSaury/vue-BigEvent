@@ -48,20 +48,20 @@
      },
      mutations: {
        // 更新 token 的 mutation 函数
-       updateToken (state, newToken) {
-         state.token = newToken
+       updateToken (state, val) {
+         state.token = val
        },
        // 更新用户的信息
-       updateUserInfo (state, info) {
-         state.userInfo = info
+       updateUserInfo (state, val) {
+         state.userInfo = val
        }
      },
      actions: {
        // 定义初始化用户基本信息的 action 函数
-       async initUserInfo (store) {
+       async getUserInfoActions (store) {
          const { data: res } = await getUserInfoAPI()
          if (res.code === 0) {
-           store.commit('updateUserInfo', res.data)
+           store.commit('updateUserInfo', res.data.data)
          }
        }
      },
@@ -81,7 +81,7 @@
      if (token && !store.state.userInfo.username) {
        // 有token但是没有用户信息, 才去请求用户信息保存到vuex里
        // 调用actions里方法请求数据
-       store.dispatch('initUserInfo')
+       store.dispatch('getUserInfoActions')
        // 下次切换页面vuex里有用户信息数据就不会重复请求用户信息
      }
    
@@ -292,7 +292,7 @@
     * 获取-侧边栏菜单数据
     * @returns Promise对象
     */
-   export const getMenusAPI = () => {
+   export const getMenuListAPI = () => {
      return request({
        url: '/my/menus',
        headers: {
@@ -305,7 +305,7 @@
 2. 在`src/views/layout/index.vue`组件中, 引入接口方法, 发请求拿到数据, 保存到data变量中
 
    ```js
-   import { getMenusAPI } from '@/api'
+   import { getMenuListAPI } from '@/api'
    export default {
      // ...其他
      data () {
@@ -314,15 +314,17 @@
        }
      },
      created () {
-       this.getMenusListFn()
+       this.getMenuListFn()
      },
      methods: {
        // ...其他
-       // 获取侧边栏菜单数据
-       async getMenusListFn () {
-         const { data: res } = await getMenusAPI()
+       
+       // 请求-侧边栏数据
+       async getMenuListFn () {
+         const res = await getMenuListAPI()
          console.log(res)
-         this.menus = res.data
+         this.menus = res.data.data
+       }
        }
      }
    }
@@ -332,23 +334,25 @@
 
    ```vue
    <template v-for="item in menus">
-       <!-- 不包含子菜单的“一级菜单” -->
-       <el-menu-item :index="item.indexPath" :key="item.indexPath" v-if="!item.children">
-           <i :class="item.icon"></i>{{ item.title }}
-       </el-menu-item>
+               <el-menu-item v-if="!item.children" :index="item.indexPath" :key="item.indexPath">
+                 <i :class="item.icon"></i>
+                 <span>{{item.title}}</span>
+               </el-menu-item>
+                <!-- 包含子菜单的“一级菜单” -->
+               <el-submenu v-else :index="item.indexPath" :key="item.indexPath">
+                 <template slot="title">
+                   <i :class="item.icon"></i>
+                   <span>{{item.title}}</span>
+                 </template>
+                 <!-- 循环渲染“二级菜单” -->
+                 <el-menu-item v-for="obj in item.children"  :index="obj.indexPath" :key="obj.indexPath">
+                   <i :class="obj.icon"></i>
+                   <span>{{obj.title}}</span>
+                 </el-menu-item>
    
-       <!-- 包含子菜单的“一级菜单” -->
-       <el-submenu :index="item.indexPath" :key="item.indexPath" v-else>
-           <template slot="title">
-               <i :class="item.icon"></i>
-               <span>{{ item.title }}</span>
-           </template>
-           <!-- 循环渲染“二级菜单” -->
-           <el-menu-item :index="subItem.indexPath" v-for="subItem in item.children" :key="subItem.indexPath">
-               <i :class="subItem.icon"></i>{{ subItem.title }}
-           </el-menu-item>
-       </el-submenu>
-   </template>
+               </el-submenu>
+   
+             </template>
    ```
 
 4. 修改 `el-menu` 组件的 `default-active` 属性，可以设置默认激活的左侧菜单, 为首页路由路径
@@ -380,10 +384,6 @@
 
 6. 点击左侧导航, 查看路由地址是否切换
 
-
-
-
-
 ### 小结
 
 1. el-menu如何集成路由切换功能?
@@ -414,14 +414,40 @@
 2. 在`utils/request.js`中, 使用自定义axios函数绑定请求拦截器, 判断有token再携带到请求头上
 
    ```js
+   import axios from 'axios'
+   import store from '@/store'
+   // 创建一个自定的axios方法(比原axios多了个基地址)
+   // axios函数请求的url地址前面会被拼接基地址, 然后axios请求baseURL+url后台完整地址
+   const myAxios = axios.create({
+     baseURL: 'http://big-event-vue-api-t.itheima.net'
+   })
+   
+   
    // 定义请求拦截器
    myAxios.interceptors.request.use(function (config) {
      // 为请求头挂载 Authorization 字段
      config.headers.Authorization = store.state.token
+     // config配置对象（要请求后台的参数都在这个对象上）
+     // 在请求前会触发一次，这个return 交给axios源码内，根据配置项发起请求
+   
+     // 在发起时要统一携带请求头Authorization和token值
+     // 判断，登录和注册页面，vuex里无token，而且登录接口和注册接口也不需要携带token（其他页面需要——）
+     if (store.state.token) {
+       config.headers.Authorization = store.state.token
+     }
+   
      return config
    }, function (error) {
+     // 请求发起前端代码，如果有异常报错，会直接进入这里
+     // 返回一个拒绝状态的Promise对象（axios留在原地的Promise对象状态就为失败结果为error变量值
+     // 此函数类似于catch函数()里的return
+     // 口诀：return 非Promise对象值，会作为陈工的结果，返回给下一个Promise对象（axios留在原地）
+     // Promise.reject()原地留下一个新的Promise对象(状体为失败)
      return Promise.reject(error)
    })
+   
+   // 导出自定义的axios方法, 供外面调用传参发请求
+   export default myAxios
    
    ```
 
@@ -477,6 +503,7 @@
    > 有token值证明刚才登录过, 无token值证明未登录
 
    ```js
+   // 浏览器在第一次打开项目页面，会触发一次全局前置路由守卫函数
    router.beforeEach((to, from, next) => {
      const token = store.state.token
      if (token) {
@@ -484,7 +511,7 @@
        if (!store.state.userInfo.username) {
          // 有token但是没有用户信息, 才去请求用户信息保存到vuex里
          // 调用actions里方法请求数据
-         store.dispatch('initUserInfo')
+         store.dispatch('getUserInfoActions')
          // 下次切换页面vuex里有用户信息数据就不会重复请求用户信息
        }
        next() // 路由放行
@@ -511,7 +538,7 @@
        if (!store.state.userInfo.username) {
          // 有token但是没有用户信息, 才去请求用户信息保存到vuex里
          // 调用actions里方法请求数据
-         store.dispatch('initUserInfo')
+         store.dispatch('getUserInfoActions')
          // 下次切换页面vuex里有用户信息数据就不会重复请求用户信息
        }
        next() // 路由放行
@@ -581,6 +608,8 @@
 5. 在第二个函数, 编写判断401状态码, token过期做出的处理逻辑
 
    ```js
+   import router from '@/router'
+   import { Message } from 'element-ui'
    // 定义响应拦截器
    myAxios.interceptors.response.use(function (response) {
      // 响应状态码为 2xx 时触发成功的回调，形参中的 response 是“成功的结果”
@@ -591,7 +620,9 @@
        // 无效的 token
        // 把 Vuex 中的 token 重置为空，并跳转到登录页面
        store.commit('updateToken', '')
+       store.commit('updateUserInfo', {})
        router.push('/login')
+       Message.error('用户身份已过期')
      }
      return Promise.reject(error)
    })
@@ -678,7 +709,7 @@
    </template>
    
    <script>
-   import * as echarts from 'echarts'
+   
    
    export default {
      name: 'my-home'
@@ -1157,7 +1188,7 @@
 
 ### 讲解
 
-1. 在 `src/views/User/userInfo.vue` 组件标签, ==直接复制==
+1. 在 `src/views/user/userInfo.vue` 组件标签, ==直接复制==
 
    ```vue
    <template>
@@ -1229,7 +1260,7 @@
 
    
 
-3. 在 `src/router/index.js` 模块中，导入 `UserInfo.vue` 组件，并声明对于应的路由规则：
+3. 在 `src/router/index.js` 模块中，导入 `userInfo.vue` 组件，并声明对于应的路由规则：
 
    ```js
    {
@@ -1340,7 +1371,9 @@
    > 关闭这个检查
 
    ```bash
-   camelcase: 'off'
+   rules: {
+       camelcase: 'off'
+   }
    ```
 
 5. 验证通过之后，发起请求，修改用户的信息：
@@ -1531,8 +1564,8 @@
 
    ```vue
    <!-- 图片，用来展示用户选择的头像 -->
-   <img class="the_img" v-if="!this.avatar" src="../../assets/images/avatar.jpg" alt="" />
-   <img class="the_img" v-else :src="this.avatar" alt="">
+   <img class="the_img" v-if="!avatar" src="../../assets/images/avatar.jpg" alt="" />
+   <img class="the_img" v-else :src="avatar" alt="">
    ```
 
    
@@ -1563,10 +1596,21 @@
 3. 方式2: 使用`URL.createObjectURL`方法, 也可以把File类型文件, 转成一个Blob类型的纯前端本地的链接
 
    ```js
-   // 使用URL.createObjURL()来转换文件变成图片地址(纯前端本地)
-   this.avatar = URL.createObjectURL(files[0])
+   onFileChange (e) {
+         // 获取用户选择的文件列表（伪数组）
+         const files = e.target.files
+         if (files.length === 0) {
+           // 没有选择图片
+           this.avatar = ''
+         } else {
+           // 选择了图片
+           console.log(files[0])
+           // 使用URL.createObjURL()来转换文件变成图片地址(纯前端本地)
+           this.avatar = URL.createObjectURL(files[0])
+         }
+       }
    ```
-
+   
    
 
 ### 小结
@@ -1637,7 +1681,7 @@
              const res = await updateAvatarAPI(this.avatar)
              if (res.code !== 0) return this.$message.error('上传头像失败！')
              this.$message.success('上传头像成功！')
-             this.$store.dispatch('initUserInfo')
+             this.$store.dispatch('getUserInfoActions')
            }
    
            // 使用URL.createObjURL()来转换文件变成图片地址(纯前端本地)
@@ -1874,10 +1918,13 @@
            if (!valid) return false // 未通过校验拦住
    
            const { data: res } = await updatePwdAPI(this.pwdForm)
-           if (res.code !== 0) return this.$message.error('更新密码失败！')
+           if (res.code !== 0) return this.$message.error('原密码不正确！！')
    
            this.$message.success('更新密码成功！')
            this.$refs.pwdFormRef.resetFields()
+           this.$store.commit('updateToken','')
+           this.$store.commit('updateUserInfo',{})
+           this.$router.push('/login')
          })
        },
        // 重置按钮->点击事件
@@ -1889,7 +1936,7 @@
    </script>
    
    ```
-
+   
    
 
 ### 小结

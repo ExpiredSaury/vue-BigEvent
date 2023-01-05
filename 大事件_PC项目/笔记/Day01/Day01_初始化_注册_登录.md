@@ -825,6 +825,31 @@ rules是一个对象，以键值对的格式来约定规则：
    
    ```
 
+   写完之后没有背景，要去掉App.vue模板中的div
+
+   ```vue
+   <template>
+       <!-- 一级路由规则对象组件的挂载点 -->
+       <router-view></router-view>
+   </template>
+   
+   <script>
+   import { registerAPI } from '@/api'
+   export default {
+     async created () {
+       const res = await registerAPI()
+       console.log(res)
+     }
+   }
+   </script>
+   <style>
+   
+   </style>
+   
+   ```
+
+   
+
 2. 查找elementUI组件库, 要完成表单组件布局, 并带上基础校验, ==自己分析铺设, 变量可以看, 不可以复制==
 
    * 规则1: 用户名必须是1-10的大小写字母数字
@@ -833,32 +858,34 @@ rules是一个对象，以键值对的格式来约定规则：
 
    ```vue
    <!-- 注册的表单区域 -->
-   <el-form :model="regForm" :rules="regRules" ref="regRef">
-     <!-- 用户名 -->
-     <el-form-item prop="username">
-       <el-input v-model="regForm.username" placeholder="请输入用户名"></el-input>
-     </el-form-item>
-     <!-- 密码 -->
-     <el-form-item prop="password">
-       <el-input v-model="regForm.password" type="password" placeholder="请输入密码"></el-input>
-     </el-form-item>
-     <!-- 确认密码 -->
-     <el-form-item prop="repassword">
-       <el-input v-model="regForm.repassword" type="password" placeholder="请再次确认密码"></el-input>
-     </el-form-item>
-     <el-form-item>
-       <el-button type="primary" class="btn-reg">注册</el-button>
-       <el-link type="info">去登录</el-link>
-     </el-form-item>
-   </el-form>
+         <el-form ref="form" :model="form" label-width="0px" :rules="rulesOBbj" >
+           <el-form-item prop="username">
+             <el-input placeholder="请输入用户名" v-model="form.username"></el-input>
+           </el-form-item>
+           <el-form-item prop="password">
+             <el-input placeholder="请输入密码" v-model="form.password"></el-input>
+           </el-form-item>
+           <el-form-item prop="repassword">
+             <el-input placeholder="请再次确认密码" v-model="form.repassword"></el-input>
+           </el-form-item>
+           <el-form-item>
+             <el-button type="primary" class="btn-reg">注册</el-button>
+             <el-link type="info">去登录</el-link>
+           </el-form-item>
+         </el-form>
+   
    
    
    <script>
+   // 经验
+   // 前端绑定数据对象属性名，可以直接跟要调用的功能接口的参数名一致
+   // 好处是：我们可以吧前端对象（带着同名的属性和前端的值）发给后台
    export default {
      name: 'my-register',
      data () {
+       // 注意：必须在data函数里定义此箭头函数，才能确保this.from使用
        const samePwd = (rule, value, callback) => {
-         if (value !== this.regForm.password) {
+         if (value !== this.form.password) {
            // 如果验证失败，则调用 回调函数时，指定一个 Error 对象。
            callback(new Error('两次输入的密码不一致!'))
          } else {
@@ -867,14 +894,12 @@ rules是一个对象，以键值对的格式来约定规则：
          }
        }
        return {
-         // 注册表单的数据对象
-         regForm: {
-           username: '',
-           password: '',
-           repassword: ''
+         form: { // 表单的数据对象
+           username: '', // 用户名
+           password: '', // 密码
+           repassword: '' // 确认密码
          },
-         // 注册表单的验证规则对象
-         regRules: {
+         rulesOBbj: { // 表单的规则检验对象
            username: [
              { required: true, message: '请输入用户名', trigger: 'blur' },
              {
@@ -901,6 +926,7 @@ rules是一个对象，以键值对的格式来约定规则：
      }
    }
    </script>
+   
    ```
 
 
@@ -935,20 +961,23 @@ rules是一个对象，以键值对的格式来约定规则：
 1. 注册按钮, 绑定点击事件
 
    ```vue
-   <el-button type="primary" class="btn-reg" @click="regNewUserFn">注册</el-button>
+   <el-button type="primary" class="btn-reg" @click="registerFn">注册</el-button>
    ```
 
 2. 在事件处理函数中, 先执行表单校验
 
    ```js
-   methods: {
-       // 注册新用户
-       regNewUserFn () {
-         // 进行表单预验证
-         this.$refs.regRef.validate(valid => {
-           if (!valid) return false
-           // 尝试拿到用户输入的内容
-           console.log(this.regForm)
+    methods: {
+       // 注册的点击事件
+       registerFn () {
+         // JS兜底校验
+         this.$refs.form.validate(valid => {
+           if (valid) {
+             // 通过校验
+             console.log(this.form)
+           } else {
+             return false // 阻止默认提交行为（表单下面红色提示会自动出现——）
+           }
          })
        }
      }
@@ -957,47 +986,74 @@ rules是一个对象，以键值对的格式来约定规则：
 3. 前端准备好了, 准备调用后台接口了, 所以准备接口方法, 在`src/api/index.js`定义
 
    ```js
-   /**
-    * 注册接口
-    * @param {*} param0 { username: 用户名, password: 密码 }
-    * @returns Promise对象
-    */
+   import request from '@/utils/request'
+   
+   // registerAPI(this.from)
+   // registerAPI(
+   //   { // 表单的数据对象
+   //     username: '',
+   //     password: '',
+   //     repassword: ''
+   //   }
+   // )
+   // 形参obj的值会调用时传来的对象
+   // obj ={username:'值',password:'值',repassword:'值'}
+   // 左侧想要对象结构赋值（语法👇）
+   // { username:username变量名, password:变量名, repassword:变量名 }={username:'',password:'',repassword:''}
+   // 函数传参的obj就改成了对象结构接收传入的数据对象
+   // { username:username, password:password, repassword:repassword }
+   // key是传入的对象key匹配，value是变量名，用于接收外面传入的值
+   // ES6规定，key和value同名的时候，可以简写(key既是key也是value变量名）
+   
    export const registerAPI = ({ username, password, repassword }) => {
      return request({
+   
        url: '/api/reg',
-       method: 'post',
+       method: 'POST',
        data: {
+         // axios传参params,data
+         // params的对象参数名和值，axios源码会把参数和值，拼接成url?后面给后台（query查询字符串）
+         // data的对象参数和值，axios源码会把参数和值，拼接在请求体里（body参数）
          username,
          password,
          repassword
        }
      })
    }
+   
    ```
 
 4. 在逻辑页面引用接口, 并在注册逻辑中调用, 并使用element绑定在Vue全局属性上的$message弹窗方法
 
    ```js
-   // 注册新用户
-   regNewUserFn () {
-       // 进行表单预验证
-       this.$refs.regRef.validate(async valid => {
-           if (!valid) return false
-           // 尝试拿到用户输入的内容
-           // console.log(this.regForm)
-           // 1. 调用注册接口
-           const { data: res } = await registerAPI(this.regForm)
-           console.log(res)
-           // 2. 注册失败，提示用户
-           if (res.code !== 0) return this.$message.error(res.message)
-           // 3. 注册成功，提示用户
-           this.$message.success(res.message)
-           // 4. 跳转到登录页面
-           this.$router.push('/login')
-       })
+   import { registerAPI } from '@/api'
+   export default {
+   methods: {
+       // 注册的点击事件
+       registerFn () {
+         // JS兜底校验
+         this.$refs.form.validate(async valid => {
+           if (valid) {
+             // 通过校验
+             console.log(this.form)
+             // 1.调用接口
+             const { data: res } = await registerAPI(this.form)
+             console.log(res)
+             // 2.注册失败，提示用户
+             if (res.code !== 0) return this.$message.error(res.message)
+             // 3.注册成功，提示用户
+             this.$message.success(res.message)
+             // 4.跳转到登录页面
+             this.$router.push('/login')
+           } else {
+             return false // 阻止默认提交行为（表单下面红色提示会自动出现——）
+           }
+         })
+       }
+     }
    }
    ```
-
+   
    
 
 ### 小结
@@ -1135,6 +1191,17 @@ rules是一个对象，以键值对的格式来约定规则：
    <el-link type="info" @click="$router.push('/reg')">去注册</el-link>
    ```
 
+4. 在路由中添加配置默认是登录页面
+
+```js
+const routes = [
+  {
+    path: '/',
+    redirect: '/login'
+  },
+]
+```
+
 
 
 ### 小结
@@ -1193,6 +1260,9 @@ rules是一个对象，以键值对的格式来约定规则：
 3. 在`src/view/login/index.vue`登录页面, 引入接口方法并, 实现对应事件处理函数逻辑, 校验和调用接口
 
    ```js
+   import { loginAPI } from '@/api'
+   
+   export default {
    methods: {
        // 登录按钮->点击事件
        async loginFn () {
@@ -1207,8 +1277,9 @@ rules是一个对象，以键值对的格式来约定规则：
          })
        }
      }
+   }
    ```
-
+   
    
 
 ### 小结
@@ -1256,24 +1327,28 @@ rules是一个对象，以键值对的格式来约定规则：
    > 可以直接调用 / 映射调用
 
    ```js
-   
    import { mapMutations } from 'vuex'
    export default {
-     // ...其他
+     //其他
      methods: {
        ...mapMutations(['updateToken']),
-       // 登录按钮->点击事件
-       async loginFn () {
+       // 登录点击事件
+       loginFn () {
          this.$refs.loginRef.validate(async valid => {
-           if (!valid) return
-           // 1. 发起登录的请求
-           const { data: res } = await loginAPI(this.loginForm)
-           // 2. 登录失败
-           if (res.code !== 0) return this.$message.error(res.message)
-           // 3. 登录成功
-           this.$message.success(res.message)
-           // 4. 保存到vuex中
-           this.updateToken(res.token)
+           if (valid) {
+             const { data: res } = await loginAPI(this.loginForm)
+             // 根据后台返回的登录提示信息，做判断给用户提示
+              // 登录失败
+             if (res.code !== 0) return this.$message.error(res.message)
+             // 登录成功
+             this.$message.success(res.message)
+             // 提交给mutations把token字符串保存到vuex中
+             this.updateToken(res.token)
+   
+             console.log(res)
+           } else {
+             return false
+           }
          })
        }
      }
@@ -1312,7 +1387,7 @@ rules是一个对象，以键值对的格式来约定规则：
 1. 下载此包到当前工程中
 
    ```bash
-   yarn add vuex-persistedstate@3.2.1
+   npm i vuex-persistedstate@3.2.1
    ```
 
 2. 在`src/store/index.js`中, 导入并配置
@@ -1517,17 +1592,27 @@ rules是一个对象，以键值对的格式来约定规则：
 
    ```js
    methods: {
+       // 退出登录的点击事件
        logoutFn () {
-         // 询问用户是否退出登录
-         this.$confirm('您确认退出登录吗？', '提示', {
+         this.$confirm('确定要退出吗, 是否继续?', '提示', {
            confirmButtonText: '确定',
            cancelButtonText: '取消',
            type: 'warning'
          })
            .then(() => {
-             // TODO：执行退出登录的操作
+             // 清除 vuex,
+             this.$store.commit('updateToken', '')
+             // 强制跳转
+             this.$router.push('/login')
            })
-           .catch((err) => err)
+           .catch(() => {
+             // 取消选择
+             this.$message({
+               type: 'info',
+               message: '已取消退出'
+             })
+   
+           })
        }
      }
    ```
