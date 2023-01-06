@@ -81,25 +81,39 @@
    </el-table>
    ```
 
+   
+
 6. 在发表文章成功后，调用步骤2封装的 `initArtList` 函数：
 
    ```js
-   // 发起请求，发布文章
-   async postArticle() {
-     // 创建 FormData 对象
-     const fd = new FormData()
-     // 向 FormData 中追加数据
-     Object.keys(this.pubForm).forEach(key => {
-       fd.append(key, this.pubForm[key])
-     })
-     // 发起请求
-     const { data: res } = await this.$http.post('/my/article/add', fd)
-     if (res.code !== 0) return this.$message.error('发布文章失败！')
-     this.$message.success('发布文章成功！')
-     // 关闭对话框
-     this.pubDialogVisible = false
-     // TODO：刷新文章列表数据
-   + this.initArtListFn()
+   // 发布文章或草稿-按钮点击事件
+   pubArticleFn (state) {
+       // 1. 设置发布状态
+       this.pubForm.state = state
+       // 2. 表单预校验
+       this.$refs.pubFormRef.validate(async (valid) => {
+           if (!valid) return this.$message.error('请完善文章信息！')
+           // 3. 判断是否提供了文章封面
+           if (!this.pubForm.cover_img) { return this.$message.error('请选择文章封面！') }
+           // 4. TODO：发布文章
+           console.log(this.pubForm)
+           const fd = new FormData()
+           fd.append('title', this.pubForm.title)
+           fd.append('cate_id', this.pubForm.cate_id)
+           fd.append('content', this.pubForm.content)
+           fd.append('cover_img', this.pubForm.cover_img)
+           fd.append('state', this.pubForm.state)
+   
+           const { data: res } = await uploadArticleAPI(fd)
+   
+           if (res.code !== 0) return this.$message.error('发布文章失败！')
+           this.$message.success('发布文章成功！')
+   
+           // 关闭对话框
+           this.pubDialogVisible = false
+           // 刷新文章列表数据
+   +       this.initArtListFn()
+       })
    },
    ```
 
@@ -277,7 +291,7 @@
 2. 当用户点击**筛选按钮**时，调用 `initArtList` 函数重新发起数据请求：
 
    ```xml
-   <el-button type="primary" size="small" @click="initArtListFn">筛选</el-button>
+   <el-button type="primary" size="small" @click="choosetFn">筛选</el-button>
    ```
 
 3. 当用户点击**重置按钮**时，调用 `resetList` 函数：
@@ -286,31 +300,44 @@
    <el-button type="info" size="small" @click="resetListFn">重置</el-button>
    ```
 
-4. 声明 `resetList` 函数如下：
+4. 声明 `choosetFn` 函数如下：
 
-   ```js
-   // 重置文章的列表数据
-   resetListFn() {
-     // 1. 重置查询参数对象
-     this.q = {
-       pagenum: 1,
-       pagesize: 2,
-       cate_id: '',
-       state: ''
-     }
-     // 2. 重新发起请求
-     this.initArtListFn()
-   }
-   ```
+```js
+ // 筛选按钮点击事件
+    choosetFn () {
+      this.q.pagenum = 1
+      this.q.pagesize = 2
+      this.initArtListFn()
+    }
+```
 
-5. 在发布后, 替换调用重置条件方法
 
-   ```js
-   // TODO：刷新文章列表数据
-   this.resetListFn()
-   ```
 
-   
+5. 声明 `resetList` 函数如下：
+
+```js
+// 重置文章的列表数据
+resetListFn() {
+  // 1. 重置查询参数对象
+  this.q = {
+    pagenum: 1,
+    pagesize: 2,
+    cate_id: '',
+    state: ''
+  }
+  // 2. 重新发起请求
+  this.initArtListFn()
+}
+```
+
+6. 在发布后, 替换调用重置条件方法
+
+```js
+// TODO：刷新文章列表数据
+this.resetListFn()
+```
+
+
 
 ### 小结
 
@@ -343,7 +370,7 @@
     * @param {*} id 文章id
     * @returns Promise对象
     */
-   export const getArticleDetailFn = (id) => {
+   export const getArticleDetailAPI = (id) => {
      return request({
        url: '/my/article/info',
        params: {
@@ -536,6 +563,25 @@
 
 ### 讲解
 
+```js
+/**
+ * 删除文章
+ * @param {*} id  文章id
+ * @returns Promise对象
+ */
+export const delArticleAPI = (id) => {
+  return request({
+    url: '/my/article/info',
+    method: 'DELETE',
+    params: {
+      id
+    }
+  })
+}
+```
+
+
+
 1. 修改表格中的操作列的渲染方式
 
    ```xml
@@ -566,6 +612,12 @@
    
        if (res.code !== 0) return this.$message.error('删除失败!')
        this.$message.success('删除成功!')
+       
+       if (this.artList.length === 1) {
+           if (this.q.pagenum > 1) {
+             this.q.pagenum--
+           }
+         }
        // 刷新列表数据
        this.resetListFn()
    }
@@ -634,9 +686,13 @@
 3. 在vue.config.js中添加
 
    ```js
-    publicPath: process.env.NODE_ENV === 'development' ? '/' : './'
+   module.exports = defineConfig({
+     // 影响打包时，index.html引入其他资源的前缀地址
+      publicPath: process.env.NODE_ENV === 'production' ? './' : '/',
+   })
+   
    ```
-
+   
    
 
 ### 小结
@@ -721,7 +777,7 @@
 configureWebpack: {
   // provide the app's title in webpack's name field, so that
   // it can be accessed in index.html to inject the correct title.
-  name: name,
+ 
   externals: {
     // 基本格式：
     // '包名' : '在项目中引入的名字'
@@ -735,11 +791,6 @@ configureWebpack: {
     'vue-quill-editor': 'VueQuillEditor',
     'vuex-persistedstate': 'createPersistedState'
   },
-  resolve: {
-    alias: {
-      '@': resolve('src')
-    }
-  }
 }
 ```
 
@@ -776,9 +827,9 @@ configureWebpack: {
 
 CDN全称叫做“Content Delivery Network”，中文叫**内容分发网络**。我们用它来**提高访问速度**。
 
-​				<img src="images/010-cdn.png" style="zoom:56%; border: 1px solid #ccc" />        之后   				<img src="../../../../../备课代码/3_Vue2_人资项目_12天/笔记/images/011-其他/011-cdn.png" style="zoom:56%; border: 1px solid #ccc" />
+​				<img src="images/010-cdn.png" style="zoom:56%; border: 1px solid #ccc" />        之后   				
 
-
+![image-20230106175224379](https://gitee.com/zh_sng/cartographic-bed/raw/master/img/image-20230106175224379.png)
 
 把一些静态资源：css， .js，图片，视频放在第三方的CDN服务器上，可以加速访问速度。
 
@@ -830,8 +881,12 @@ CDN全称叫做“Content Delivery Network”，中文叫**内容分发网络**�
 2. 在**`vue.config.js`**文件中
 
    ```js
+   const { defineConfig } = require('@vue/cli-service')
+   
    // 需要排除的包对象
    let externals = {}
+   // 需要配置CDN链接
+   let CDN = { css: [], js: [] }
    // 判断是否是生产环境
    const isProduction = process.env.NODE_ENV === 'production'
    // 如何是生产环境，需要执行以下逻辑
@@ -846,35 +901,60 @@ CDN全称叫做“Content Delivery Network”，中文叫**内容分发网络**�
          * 这样引入的，所以我的 externals 的属性值应该是 ELEMENT
          * 一定要去main.js设置
        */
-       'echarts': 'echarts',
-       'vue': 'Vue',
+       echarts: 'echarts',
+       vue: 'Vue',
        'vue-router': 'VueRouter',
-       'vuex': 'Vuex',
-       'axios': 'axios',
-       'dayjs': 'dayjs',
+       vuex: 'Vuex',
+       axios: 'axios',
+       dayjs: 'dayjs',
        'element-ui': 'ELEMENT',
        'vue-quill-editor': 'VueQuillEditor',
        'vuex-persistedstate': 'createPersistedState'
      }
+     CDN = {
+       css: [
+         'https://unpkg.com/element-ui@2.15.8/lib/theme-chalk/index.css',
+         'https://unpkg.com/quill@1.3.7/dist/quill.core.css',
+         'https://unpkg.com/quill@1.3.7/dist/quill.snow.css',
+         'https://unpkg.com/quill@1.3.7/dist/quill.bubble.css'
+       ],
+       js: [
+   
+         'https://unpkg.com/echarts@5.4.1/dist/echarts.min.js',
+         'https://unpkg.com/vue@2.6.14/dist/vue.js',
+         'https://unpkg.com/vue-router@3.5.1/dist/vue-router.js',
+         'https://unpkg.com/vuex@3.6.2/dist/vuex.js',
+         'https://unpkg.com/axios@1.2.2/dist/axios.min.js',
+         'https://unpkg.com/dayjs@1.11.7/dayjs.min.js',
+         'https://unpkg.com/element-ui@2.15.12/lib/index.js',
+         'https://unpkg.com/quill@1.3.7/dist/quill.js',
+         'https://unpkg.com/vue-quill-editor@3.0.6/dist/vue-quill-editor.js',
+         'https://unpkg.com/vuex-persistedstate@3.2.1/dist/vuex-persistedstate.umd.js'
+       ]
+     }
    }
+   module.exports = defineConfig({
+     transpileDependencies: true,
+     lintOnSave: false,
+     // 影响打包时，index.html引入其他资源的前缀地址
+     publicPath: process.env.NODE_ENV === 'production' ? './' : '/',
+     configureWebpack: {
+       // provide the app's title in webpack's name field, so that
+       // it can be accessed in index.html to inject the correct title.
+       externals: externals
+     },
+     chainWebpack (config) {
+       // 注入cdn变量，打包时会执行
+       config.plugin('html').tap(args => {
+         args[0].cdn = CDN // 配置CDN 给插件
+         return args
+       })
+     }
+   })
+   
    ```
 
    
-
-3. webpack配置externals配置项
-
-   ```js
-   configureWebpack: {
-     // 配置单页应用程序的页面的标题
-     name: name,
-   + externals: externals,
-     resolve: {
-       alias: {
-         '@': resolve('src')
-       }
-     }
-   }
-   ```
 
 4. 在`public/index.html`中, 填入cdn的地址
 
@@ -883,26 +963,19 @@ CDN全称叫做“Content Delivery Network”，中文叫**内容分发网络**�
    > 因为webpack不会再打包这些第三方代码了, 所以运行时缺少他们, 我们用cdn链接的方式引入到html里参与运行
 
    ```html
-   <!-- built files will be auto injected -->
-   <script src="https://unpkg.com/echarts@5.3.2/dist/echarts.min.js"></script>
-   <script src="https://unpkg.com/vue@2.6.14/dist/vue.js"></script>
-   <script src="https://unpkg.com/vue-router@3.5.1/dist/vue-router.js"></script>
-   <script src="https://unpkg.com/vuex@3.6.2/dist/vuex.js"></script>
-   <script src="https://unpkg.com/axios@0.27.2/dist/axios.min.js"></script>
-   <script src="https://unpkg.com/dayjs@1.11.3/dayjs.min.js"></script>
-   <script src="https://unpkg.com/element-ui@2.15.8/lib/index.js"></script>
-   <script src="https://unpkg.com/quill@1.3.7/dist/quill.js"></script>
-   <script src="https://unpkg.com/vue-quill-editor@3.0.6/dist/vue-quill-editor.js"></script>
-   <script src="https://unpkg.com/vuex-persistedstate@3.2.1/dist/vuex-persistedstate.umd.js"></script>
+     <!-- 引入js -->
+       <% for(var js of htmlWebpackPlugin.options.cdn.js) {%>
+         <script src="<%=js%>"></script>
+         <% } %>
    ```
-
+   
 5. 在头部再引入样式文件的cdn地址
 
    ```html
-   <link rel="stylesheet" href="https://unpkg.com/element-ui@2.15.8/lib/theme-chalk/index.css">
-   <link rel="stylesheet" href="https://unpkg.com/quill@1.3.7/dist/quill.core.css">
-   <link rel="stylesheet" href="https://unpkg.com/quill@1.3.7/dist/quill.snow.css">
-   <link rel="stylesheet" href="https://unpkg.com/quill@1.3.7/dist/quill.bubble.css">
+     <!-- 引入样式 -->
+     <% for(var css of htmlWebpackPlugin.options.cdn.css) {%>
+       <link rel="stylesheet" href="<%=css%>">
+       <% } %>
    ```
 
    

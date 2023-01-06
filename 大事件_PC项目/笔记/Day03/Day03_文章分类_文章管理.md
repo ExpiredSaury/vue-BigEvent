@@ -907,7 +907,7 @@
            { required: true, message: '请输入文章标题', trigger: 'blur' },
            { min: 1, max: 30, message: '文章标题的长度为1-30个字符', trigger: 'blur' }
          ],
-         cate_id: [{ required: true, message: '请选择文章标题', trigger: 'blur' }]
+         cate_id: [{ required: true, message: '请选择文章标题', trigger: 'change' }]
        }
      }
    }
@@ -1062,9 +1062,24 @@
    ]
    ```
 
-   
+
+8. 失去焦点校验
+
+```vue
+<el-form-item label="文章内容" prop="content">
+          <!-- 使用 v-model 进行双向的数据绑定 -->
+          <quill-editor v-model="pubForm.content" @change="contentChangeFn"></quill-editor>
+        </el-form-item>
+```
 
 
+
+```js
+ // 富文本编辑器内容改变触发此事件方法
+    contentChangeFn () {
+      this.$refs.pubFormRef.validateField('content')
+    }
+```
 
 ### 小结
 
@@ -1102,7 +1117,7 @@
 1. 在 `artList.vue` 组件的模板结构中，添加文章封面对应的 DOM 结构：
 
    ```xml
-   <el-form-item label="文章封面">
+   <el-form-item label="文章封面" prop="cover_img">
      <!-- 用来显示封面的图片 -->
      <img src="../../assets/images/cover.jpg" alt="" class="cover-img" ref="imgRef" />
      <br />
@@ -1179,7 +1194,18 @@
    }
    ```
 
-   
+8. 校验规则
+
+```js
+pubFormRules: {
+        // ....其他
+        cover_img: [
+          { required: true, message: '请选择封面', trigger: 'blur' }
+        ]
+      },
+```
+
+
 
 ### 小结
 
@@ -1231,6 +1257,7 @@
    +   const url = URL.createObjectURL(files[0])
    +   this.$refs.imgRef.setAttribute('src', url)
      }
+   +   this.$refs.pubFormRef.validateField('cover_img')
    }
    ```
 
@@ -1378,22 +1405,34 @@
 2. 在发布/存草稿按钮, 点击事件中调用接口, 组织好参数传递
 
    ```js
-   // 创建 FormData 对象
-   const fd = new FormData()
+   // 发布文章或草稿-按钮点击事件
+   pubArticleFn (state) {
+       // 1. 设置发布状态
+       this.pubForm.state = state
+       // 2. 表单预校验
+       this.$refs.pubFormRef.validate(async (valid) => {
+           if (!valid) return this.$message.error('请完善文章信息！')
+           // 3. 判断是否提供了文章封面
+           if (!this.pubForm.cover_img) { return this.$message.error('请选择文章封面！') }
+           // 4. TODO：发布文章
+           console.log(this.pubForm)
+           const fd = new FormData()
+           fd.append('title', this.pubForm.title)
+           fd.append('cate_id', this.pubForm.cate_id)
+           fd.append('content', this.pubForm.content)
+           fd.append('cover_img', this.pubForm.cover_img)
+           fd.append('state', this.pubForm.state)
    
-   // 向 FormData 中追加数据
-   Object.keys(this.pubForm).forEach((key) => {
-       fd.append(key, this.pubForm[key])
-   })
+           const { data: res } = await uploadArticleAPI(fd)
    
-   // 发起请求
-   const { data: res } = await uploadArticleAPI(fd)
-   if (res.code !== 0) return this.$message.error('发布文章失败！')
-   this.$message.success('发布文章成功！')
+           if (res.code !== 0) return this.$message.error('发布文章失败！')
+           this.$message.success('发布文章成功！')
    
-   // 关闭对话框
-   this.pubDialogVisible = false
-   // TODO：刷新文章列表数据
+           // 关闭对话框
+           this.pubDialogVisible = false
+          
+       })
+   },
    ```
 
 
