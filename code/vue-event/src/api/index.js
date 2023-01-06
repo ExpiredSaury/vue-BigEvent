@@ -171,3 +171,58 @@ export const delArtCateAPI = (id) => {
     }
   })
 }
+/**
+ * 发布文章
+ * @param {*} fd 表单对象
+ * @returns Promise对象
+ */
+export const uploadArticleAPI = (fd) => {
+  return request({
+    url: '/my/article/add',
+    method: 'POST',
+    data: fd // 参数要的是表单对象, 不能写普通对象, axios内部会判断, 如果是表单对象, 传递的请求体会设置Content-Type: form-data与后端对应
+  })
+}
+/**
+ * 获取文章列表
+ * @param {*} param0 { pagenum: 当前页码数, pagesize: 当前页条数, cate_id: 文章分类id, state: 文章状态 }
+ * @returns Promise对象
+ */
+export const getArticleListAPI = ({ pagenum, pagesize, cate_id, state }) => {
+  return request({
+    url: '/my/article/list',
+    params: {
+      pagenum,
+      pagesize,
+      cate_id,
+      state
+    }
+  })
+}
+/**
+ * 获取-文章详情
+ * @param {*} id 文章id
+ * @returns Promise对象
+ */
+export const getArticleDetailAPI = (id) => {
+  return request({
+    url: '/my/article/info',
+    params: {
+      id
+    }
+  })
+}
+/**
+ * 删除文章
+ * @param {*} id  文章id
+ * @returns Promise对象
+ */
+export const delArticleAPI = (id) => {
+  return request({
+    url: '/my/article/info',
+    method: 'DELETE',
+    params: {
+      id
+    }
+  })
+}
